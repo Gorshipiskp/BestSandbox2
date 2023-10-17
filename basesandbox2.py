@@ -12,7 +12,7 @@ lang = "ru"
 language = json.load(open("langs.json", 'r', encoding="UTF-8"))[lang]
 
 BASE_COLOR = (15, 20, 25)
-k_global = 0.25
+k_global = 0.1
 
 CtoK = lambda temp: temp + 273.15
 DEFAULT_TEMPERATURE = CtoK(25)
@@ -354,41 +354,44 @@ class Matrix:
         self.pmatrix[*key] = value
 
     @staticmethod
-    @njit(fastmath=True)
+    # @njit(fastmath=True)
     def changing_temp(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, pmatrix_bools: numpy.ndarray, x0: int,
                       y0: int, x1: int, y1: int) -> None:
         if not (0 <= x0 + x1 < temp_pmatrix.shape[0] and 0 <= y0 + y1 < temp_pmatrix.shape[1]):
             return
 
-        n0 = temp_pmatrix[x0, y0]
-        n1 = temp_pmatrix[x0 + x1, y0 + y1]
-        # n0k = HEAT_CAPACITY[pmatrix[x0, y0, 0]]
-        # n1k = HEAT_CAPACITY[pmatrix[x0 + x1, y0 + y1, 0]]
+        t1 = temp_pmatrix[x0, y0]
+        t2 = temp_pmatrix[x0 + x1, y0 + y1]
 
-        # dr = n0 / n1
-        # da = (n0 * n0k) / (n1 * n1k)
-        # du = n0 / n1
-        d = (n0 * 1 + n1 * 1) / 2
+        if t1 == t2:
+            print('SKIP_EQUALS')
+            return
 
-        # diff = abs(n0 * n0k - n1 * n1k)
-        #
-        # k = min(diff / (1 / k_global), 0.05)
-        # k = 1
+        c1 = HEAT_CAPACITY[pmatrix[x0, y0, 0]]
+        c2 = HEAT_CAPACITY[pmatrix[x0 + x1, y0 + y1, 0]]
 
-        temp_pmatrix[x0, y0] += (d - n0 * 1) / 1 * k_global
-        temp_pmatrix[x0 + x1, y0 + y1] -= (n1 * 1 - d) / 1 * k_global
-        # temp_pmatrix[x0, y0] += (d - n0 * n0k) / n0k * k_global
-        # temp_pmatrix[x0 + x1, y0 + y1] -= (n1 * n1k - d) / n1k * k_global
+        print(c1, c2)
+
+        lk = -1 if t1 < t2 else 1
+        dt_avg = (t1 + t2) / 2 * k_global
+
+        dc_rel = c1 / c2 if c1 > c2 else c2 / c1
+
+        dt1 = (dt_avg / dc_rel)
+        dt2 = (dt_avg * dc_rel)
+
+        temp_pmatrix[x0, y0] = temp_pmatrix[x0, y0] + (dt1 - dt_avg) * lk
+        temp_pmatrix[x0 + x1, y0 + y1] = temp_pmatrix[x0 + x1, y0 + y1] + (dt_avg - dt2) * -lk
         pmatrix_bools[x0, y0] = True
         pmatrix_bools[x0 + x1, y0 + y1] = True
 
     @staticmethod
-    # @Utils.speedtest
-    @njit(parallel=True, fastmath=True, nogil=True)
+    @Utils.speedtest
+    # @njit(parallel=True, fastmath=True, nogil=True)
     def temp_iter(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, pmatrix_bools: numpy.ndarray) -> None:
         shape = temp_pmatrix.shape
-        points = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-        # points = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (-1, 1), (1, 1)]
+        # points = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        points = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (-1, 1), (1, 1)]
         ln = len(points)
         changing_temp = global_changing_temp
 
