@@ -1,18 +1,16 @@
-from pixmove import check_borders, move_cond
 import json
 import time
-import numba
+
 import numpy
 import pygame
 from numba import prange, njit
 
+from pixmove import check_borders, move_cond
 
 lang = "ru"
-
 language = json.load(open("langs.json", 'r', encoding="UTF-8"))[lang]
 
 BASE_COLOR = (15, 20, 25)
-k_global = 0.1
 
 CtoK = lambda temp: temp + 273.15
 DEFAULT_TEMPERATURE = CtoK(25)
@@ -132,11 +130,6 @@ pixs = (
     },
 )
 
-statuses = {
-    'test': (int, 0),
-}
-
-STATUSES_NAMES = numba.typed.List([i for i in statuses.keys()])
 COLORS = tuple(info['color'] for info in pixs)
 NAMES = tuple(language['subs'][info['name']] for info in pixs)
 SUBS = tuple(info['subs'] for info in pixs)
@@ -145,11 +138,13 @@ HEAT_CAPACITY = tuple(info['heat_capacity'] for info in pixs)
 SUBS_CHARS = tuple(tuple(val for val in sub.values()) for sub in subs.values())
 PIXS_TEMPERATURES = tuple(pix.get("temperature", DEFAULT_TEMPERATURE) for pix in pixs)
 
-DEFAULT_STATUSES = numba.typed.List([tuple(vals[0](pix.get(status, vals[1])) for status, vals in
-                                           statuses.items()) for pix in pixs])
-
-num_statuses = len(statuses)
-default_statuses = tuple(val[1] for val in statuses.values())
+points = (
+    (5, (0, 0, 255)),
+    (285, (15, 0, 0)),
+    (400, (160, 0, 0)),
+    (685, (255, 145, 0)),
+    (1650, (255, 255, 255))
+)
 
 
 class Utils:
@@ -190,43 +185,91 @@ class Utils:
     @circle_center
     @njit(fastmath=True, cache=True)
     def get_pixels_on_circle(r: int):
-        pixels_on_circle = []
+        pixels_on_circle = numpy.array([(0, 0)] * int(3.1415 * r ** 2))
 
-        for x in range(1 - r, r):
-            for y in range(1 - r, r):
-                if x ** 2 + y ** 2 <= r ** 2:
-                    pixels_on_circle.append((x, y))
+        for x_c in prange(0, r * 2):
+            for y_c in prange(0, r * 2):
+                if (x_c - r) ** 2 + (y_c - r) ** 2 <= r ** 2:
+                    pixels_on_circle[x_c * r + y_c] = ((x_c - r), (y_c - r))
 
-        return numpy.array(pixels_on_circle)
+        return pixels_on_circle
+
+    @staticmethod
+    @njit(parallel=True, fastmath=True, nogil=True)
+    def drawline(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, bool_array: numpy.ndarray, x0: int, y0: int,
+                 x1: int, y1: int, brushsize: int, selected_pix: int,
+                 brush_mode: int, heat_quan: int, mtrx_w: int, mtrx_h: int):
+        dx: int = abs(x1 - x0)
+        dy: int = abs(y1 - y0)
+        sx: int = 1 if x0 < x1 else -1
+        sy: int = 1 if y0 < y1 else -1
+        err: int = dx - dy
+
+        while True:
+            for i in prange(-brushsize, brushsize + 1):
+                for j in prange(-brushsize, brushsize + 1):
+                    x: int = x0 + i
+                    y: int = y0 + j
+
+                    if 0 <= x < mtrx_w and 0 <= y < mtrx_h:
+                        if brush_mode == 0:
+                            pmatrix[x, y] = selected_pix
+                            bool_array[x, y] = True
+                            temp_pmatrix[x, y] = PIXS_TEMPERATURES[selected_pix]
+                        elif brush_mode == 1:
+                            temp_pmatrix[x, y] = max(temp_pmatrix[x, y] + heat_quan, 0)
+
+            if x0 == x1 and y0 == y1:
+                break
+
+            e2: int = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x0 += sx
+
+            if x0 == x1 and y0 == y1:
+                for i in prange(-brushsize, brushsize + 1):
+                    for j in prange(-brushsize, brushsize + 1):
+                        x: int = x0 + i
+                        y: int = y0 + j
+
+                        if 0 <= x < mtrx_w and 0 <= y < mtrx_h:
+                            if brush_mode == 0:
+                                pmatrix[x, y] = selected_pix
+                                bool_array[x, y] = True
+                                temp_pmatrix[x, y] = PIXS_TEMPERATURES[selected_pix]
+                            elif brush_mode == 1:
+                                temp_pmatrix[x, y] = max(temp_pmatrix[x, y] + heat_quan, 0)
+                break
+
+            if e2 < dx:
+                err += dx
+                y0 += sy
 
     @staticmethod
     @njit(parallel=True, nogil=True)
     def place_pixels(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, selected_pix: int, brush_mode: int,
-                     heat_quan: int, points, def_stats: tuple | list, x0: int = 0, y0: int = 0) -> numpy.ndarray:
+                     heat_quan: int, points, x0: int = 0, y0: int = 0) -> numpy.ndarray:
         for ind in prange(len(points)):
             if (0 <= x0 + points[ind][0] < pmatrix.shape[0]) and (0 <= y0 + points[ind][1] < pmatrix.shape[1]):
                 pox_mx, pos_my = points[ind]
 
                 if brush_mode == 0:
-                    if num_statuses > 0:
-                        pmatrix[x0 + pox_mx, y0 + pos_my] = [selected_pix, *def_stats[selected_pix]]
-                        temp_pmatrix[x0 + pox_mx, y0 + pos_my] = PIXS_TEMPERATURES[selected_pix]
-                    else:
-                        pmatrix[x0 + pox_mx, y0 + pos_my] = [selected_pix]
-                        temp_pmatrix[x0 + pox_mx, y0 + pos_my] = PIXS_TEMPERATURES[selected_pix]
+                    pmatrix[x0 + pox_mx, y0 + pos_my] = selected_pix
+                    temp_pmatrix[x0 + pox_mx, y0 + pos_my] = PIXS_TEMPERATURES[selected_pix]
                 elif brush_mode == 1:
                     temp = max(temp_pmatrix[x0 + pox_mx, y0 + pos_my] + heat_quan, 0)
                     temp_pmatrix[x0 + pox_mx, y0 + pos_my] = temp
 
     @staticmethod
-    @njit(parallel=True, nogil=True)
+    # @njit(parallel=True, nogil=True)
     def place_pixels_many(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, color_array_bool: numpy.ndarray,
-                          selected_pix: int, brush_mode: int, heat_quan: int, points, def_stats: tuple | list,
+                          selected_pix: int, brush_mode: int, heat_quan: int, points,
                           x0: int = 0, y0: int = 0) -> numpy.ndarray:
         for pnts_ind in prange(len(points)):
             cur_points = points[pnts_ind]
 
-            place_pixels(pmatrix, temp_pmatrix, selected_pix, brush_mode, heat_quan, cur_points, def_stats, x0, y0)
+            place_pixels(pmatrix, temp_pmatrix, selected_pix, brush_mode, heat_quan, cur_points, x0, y0)
 
             for ind in prange(len(cur_points)):
                 if (0 <= x0 + cur_points[ind][0] < pmatrix.shape[0]) and \
@@ -263,34 +306,40 @@ class Utils:
     @staticmethod
     @njit(fastmath=True, cache=True)
     def temperature_to_color(temp: int) -> tuple[int, int, int]:
-        points = [(50, (0, 0, 255)),
-                  (285, (15, 0, 0)),
-                  (400, (160, 0, 0)),
-                  (685, (255, 145, 0)),
-                  (1650, (255, 255, 255))]
-
         if temp <= points[1][0]:
-            blue = points[0][1][2] + (temp - points[0][0]) / (points[1][0] - points[0][0]) * (points[1][1][2] - points[0][1][2])
-            green = points[0][1][1] + (temp - points[0][0]) / (points[1][0] - points[0][0]) * (points[1][1][1] - points[0][1][1])
-            red = points[0][1][0] + (temp - points[0][0]) / (points[1][0] - points[0][0]) * (points[1][1][0] - points[0][1][0])
+            blue = points[0][1][2] + (temp - points[0][0]) / (points[1][0] - points[0][0]) * (
+                    points[1][1][2] - points[0][1][2])
+            green = points[0][1][1] + (temp - points[0][0]) / (points[1][0] - points[0][0]) * (
+                    points[1][1][1] - points[0][1][1])
+            red = points[0][1][0] + (temp - points[0][0]) / (points[1][0] - points[0][0]) * (
+                    points[1][1][0] - points[0][1][0])
 
             return int(red), int(green), int(blue)
         elif temp <= points[2][0]:
-            blue = points[1][1][2] + (temp - points[1][0]) / (points[2][0] - points[1][0]) * (points[2][1][2] - points[1][1][2])
-            green = points[1][1][1] + (temp - points[1][0]) / (points[2][0] - points[1][0]) * (points[2][1][1] - points[1][1][1])
-            red = points[1][1][0] + (temp - points[1][0]) / (points[2][0] - points[1][0]) * (points[2][1][0] - points[1][1][0])
+            blue = points[1][1][2] + (temp - points[1][0]) / (points[2][0] - points[1][0]) * (
+                    points[2][1][2] - points[1][1][2])
+            green = points[1][1][1] + (temp - points[1][0]) / (points[2][0] - points[1][0]) * (
+                    points[2][1][1] - points[1][1][1])
+            red = points[1][1][0] + (temp - points[1][0]) / (points[2][0] - points[1][0]) * (
+                    points[2][1][0] - points[1][1][0])
 
             return int(red), int(green), int(blue)
         elif temp <= points[3][0]:
-            blue = points[2][1][2] + (temp - points[2][0]) / (points[3][0] - points[2][0]) * (points[3][1][2] - points[2][1][2])
-            green = points[2][1][1] + (temp - points[2][0]) / (points[3][0] - points[2][0]) * (points[3][1][1] - points[2][1][1])
-            red = points[2][1][0] + (temp - points[2][0]) / (points[3][0] - points[2][0]) * (points[3][1][0] - points[2][1][0])
+            blue = points[2][1][2] + (temp - points[2][0]) / (points[3][0] - points[2][0]) * (
+                    points[3][1][2] - points[2][1][2])
+            green = points[2][1][1] + (temp - points[2][0]) / (points[3][0] - points[2][0]) * (
+                    points[3][1][1] - points[2][1][1])
+            red = points[2][1][0] + (temp - points[2][0]) / (points[3][0] - points[2][0]) * (
+                    points[3][1][0] - points[2][1][0])
 
             return int(red), int(green), int(blue)
         elif temp <= points[4][0]:
-            blue = points[3][1][2] + (temp - points[3][0]) / (points[4][0] - points[3][0]) * (points[4][1][2] - points[3][1][2])
-            green = points[3][1][1] + (temp - points[3][0]) / (points[4][0] - points[3][0]) * (points[4][1][1] - points[3][1][1])
-            red = points[3][1][0] + (temp - points[3][0]) / (points[4][0] - points[3][0]) * (points[4][1][0] - points[3][1][0])
+            blue = points[3][1][2] + (temp - points[3][0]) / (points[4][0] - points[3][0]) * (
+                    points[4][1][2] - points[3][1][2])
+            green = points[3][1][1] + (temp - points[3][0]) / (points[4][0] - points[3][0]) * (
+                    points[4][1][1] - points[3][1][1])
+            red = points[3][1][0] + (temp - points[3][0]) / (points[4][0] - points[3][0]) * (
+                    points[4][1][0] - points[3][1][0])
 
             return int(red), int(green), int(blue)
         return 255, 255, 255
@@ -301,11 +350,11 @@ class Matrix:
         self.size = size
         self.selected_pix = 0
         self.display_mode = 1
+        self.fill_pix = fill_pix
         self.brush_mode = 1
-        self.heat_quan = 10
         self.pause = False
 
-        self.pmatrix = numpy.array([[[fill_pix, *default_statuses]] * self.size[1]] * self.size[0], dtype=int)
+        self.pmatrix = numpy.array(numpy.full(size, 0, dtype=int))
         self.temp_pmatrix = numpy.array([[DEFAULT_TEMPERATURE] * self.size[1]] * self.size[0], dtype=float)
 
         self.colors_array_bool = numpy.array(numpy.full(size, True))
@@ -314,6 +363,21 @@ class Matrix:
                                                                          self.temp_pmatrix, self.display_mode)
 
         self.surface = pygame.Surface(size)
+        psx3d = pygame.surfarray.pixels3d(self.surface)
+
+        psx3d[:] = self.colors_array
+        del psx3d
+
+    def reset_field(self):
+        self.pmatrix = numpy.array(numpy.full(self.size, 0, dtype=int))
+        self.temp_pmatrix = numpy.array([[DEFAULT_TEMPERATURE] * self.size[1]] * self.size[0], dtype=float)
+
+        self.colors_array_bool = numpy.array(numpy.full(self.size, True))
+        self.colors_array, self.colors_array_bool = self.get_color_array(
+            numpy.array([[(0, 0, 0)] * self.size[1]] * self.size[0]), self.colors_array_bool, self.pmatrix,
+            self.temp_pmatrix, self.display_mode)
+
+        self.surface = pygame.Surface(self.size)
         psx3d = pygame.surfarray.pixels3d(self.surface)
 
         psx3d[:] = self.colors_array
@@ -342,7 +406,7 @@ class Matrix:
             for yind in prange(shape[1]):
                 if colors_array_bools[xind, yind]:
                     if mode == 0:
-                        colors_array[xind, yind] = COLORS[pmatrix[xind, yind, 0]]
+                        colors_array[xind, yind] = COLORS[pmatrix[xind, yind]]
                     elif mode == 1:
                         colors_array[xind, yind] = temperature_to_color(temp_pmatrix[xind, yind])
         return colors_array, numpy.full(colors_array_bools.shape, False)
@@ -354,41 +418,48 @@ class Matrix:
         self.pmatrix[*key] = value
 
     @staticmethod
-    # @njit(fastmath=True)
-    def changing_temp(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, pmatrix_bools: numpy.ndarray, x0: int,
-                      y0: int, x1: int, y1: int) -> None:
+    @njit(nogil=True, fastmath=True)
+    def changing_temp(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray,
+                      pmatrix_bools: numpy.ndarray, x0: int, y0: int, x1: int, y1: int, heat_coef: float) -> None:
         if not (0 <= x0 + x1 < temp_pmatrix.shape[0] and 0 <= y0 + y1 < temp_pmatrix.shape[1]):
             return
 
-        t1 = temp_pmatrix[x0, y0]
-        t2 = temp_pmatrix[x0 + x1, y0 + y1]
+        n0 = temp_pmatrix[x0, y0]
+        n1 = temp_pmatrix[x0 + x1, y0 + y1]
 
-        if t1 == t2:
-            print('SKIP_EQUALS')
+        if n0 == n1:
             return
 
-        c1 = HEAT_CAPACITY[pmatrix[x0, y0, 0]]
-        c2 = HEAT_CAPACITY[pmatrix[x0 + x1, y0 + y1, 0]]
+        dens1 = DENSITY[pmatrix[x0, y0]]
+        dens2 = DENSITY[pmatrix[x0 + x1, y0 + y1]]
 
-        print(c1, c2)
+        heat_cap1 = HEAT_CAPACITY[pmatrix[x0, y0]]
+        heat_cap2 = HEAT_CAPACITY[pmatrix[x0 + x1, y0 + y1]]
 
-        lk = -1 if t1 < t2 else 1
-        dt_avg = (t1 + t2) / 2 * k_global
+        # n0k = HEAT_CAPACITY[pmatrix[x0, y0, 0]]
+        # n1k = HEAT_CAPACITY[pmatrix[x0 + x1, y0 + y1, 0]]
 
-        dc_rel = c1 / c2 if c1 > c2 else c2 / c1
+        diffChars = (heat_cap1 / heat_cap2) ** 1.15 / dens1 * dens2
 
-        dt1 = (dt_avg / dc_rel)
-        dt2 = (dt_avg * dc_rel)
+        if diffChars > 1:
+            diffChars = 1 / diffChars
 
-        temp_pmatrix[x0, y0] = temp_pmatrix[x0, y0] + (dt1 - dt_avg) * lk
-        temp_pmatrix[x0 + x1, y0 + y1] = temp_pmatrix[x0 + x1, y0 + y1] + (dt_avg - dt2) * -lk
+        diff = abs(n0 - (n0 + n1) / 2) * heat_coef * diffChars
+
+        if n0 > n1:
+            temp_pmatrix[x0, y0] -= diff
+            temp_pmatrix[x0 + x1, y0 + y1] += diff
+        elif n0 < n1:
+            temp_pmatrix[x0, y0] += diff
+            temp_pmatrix[x0 + x1, y0 + y1] -= diff
+
         pmatrix_bools[x0, y0] = True
         pmatrix_bools[x0 + x1, y0 + y1] = True
 
     @staticmethod
-    @Utils.speedtest
-    # @njit(parallel=True, fastmath=True, nogil=True)
-    def temp_iter(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, pmatrix_bools: numpy.ndarray) -> None:
+    @njit(parallel=True, fastmath=True, nogil=True)
+    def temp_iter(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, pmatrix_bools: numpy.ndarray,
+                  heat_coef: float) -> numpy.ndarray:
         shape = temp_pmatrix.shape
         # points = [(0, 1), (1, 0), (0, -1), (-1, 0)]
         points = [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (-1, 1), (1, 1)]
@@ -396,53 +467,53 @@ class Matrix:
         changing_temp = global_changing_temp
 
         for x in prange(shape[0]):
-            for y in prange(shape[1]):
-                for pind in prange(ln):
-                    changing_temp(pmatrix, temp_pmatrix, pmatrix_bools, x, y, points[pind][0], points[pind][1])
+            for y in range(shape[1]):
+                for pind in range(ln):
+                    changing_temp(pmatrix, temp_pmatrix, pmatrix_bools, x, y, points[pind][0], points[pind][1],
+                                  heat_coef)
 
     @staticmethod
-    # @Utils.speedtest
     @njit(parallel=True, fastmath=True, nogil=True)
-    def iter(pmatrix_bools: numpy.ndarray, pmatrix: numpy.ndarray) -> numpy.ndarray:
+    def iter(pmatrix_bools: numpy.ndarray, pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray) -> numpy.ndarray:
         shape = pmatrix.shape
 
         for x in prange(shape[0]):
             for y in prange(shape[1]):
-                pixtypes = SUBS_CHARS[SUBS[pmatrix[x, y, 0]]]
-                pixdensity = DENSITY[pmatrix[x, y, 0]]
+                pixtypes = SUBS_CHARS[SUBS[pmatrix[x, y]]]
+                pixdensity = DENSITY[pmatrix[x, y]]
 
                 if pixtypes[0]:
-                    move_cond(x, y, x, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY, 1 / 3)
-                    move_cond(x, y, x - 1, y, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY, 1 / 5)
-                    move_cond(x, y, x + 1, y, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY, 1 / 3)
-                    move_cond(x, y, x + 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY, 1 / 3)
-                    move_cond(x, y, x - 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY, 1 / 5.65)
+                    move_cond(x, y, x, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY, 1 / 3)
+                    move_cond(x, y, x - 1, y, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY, 1 / 5)
+                    move_cond(x, y, x + 1, y, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY, 1 / 3)
+                    move_cond(x, y, x + 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY,
+                              1 / 3)
+                    move_cond(x, y, x - 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY,
+                              1 / 5.65)
                 elif pixtypes[1]:
                     down_cond = 0
 
                     if check_borders(x, y + 1, shape):
-                        if DENSITY[pmatrix[x, y + 1, 0]] < pixdensity:
+                        if DENSITY[pmatrix[x, y + 1]] < pixdensity:
                             down_cond += 1
 
-                    move_cond(x, y, x - 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY,
+                    move_cond(x, y, x - 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY,
                               1 / 5 / (down_cond + 1))
-                    move_cond(x, y, x + 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, DENSITY,
+                    move_cond(x, y, x + 1, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix, DENSITY,
                               1 / 3.8 / (down_cond + 1))
 
                     if down_cond:
-                        temp = pmatrix[x, y + 1].copy()
-                        pmatrix[x, y + 1] = pmatrix[x, y]
-                        pmatrix[x, y] = temp
+                        pmatrix[x, y], pmatrix[x, y + 1] = pmatrix[x, y + 1], pmatrix[x, y]
                         pmatrix_bools[x, y] = True
                         pmatrix_bools[x, y + 1] = True
                 elif pixtypes[2]:
-                    can_do = move_cond(x, y, x, y + 1, shape, pixdensity, pmatrix, pmatrix_bools,
+                    can_do = move_cond(x, y, x, y + 1, shape, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
                                        DENSITY, 1 / 1.15, ret_posdens_bool=True)
 
                     if can_do:
                         if check_borders(x + 1, y, shape) and check_borders(x - 1, y, shape):
-                            left_density = DENSITY[pmatrix[x - 1, y, 0]]
-                            right_density = DENSITY[pmatrix[x + 1, y, 0]]
+                            left_density = DENSITY[pmatrix[x - 1, y]]
+                            right_density = DENSITY[pmatrix[x + 1, y]]
 
                             if left_density >= pixdensity and right_density >= pixdensity:
                                 continue
@@ -451,7 +522,7 @@ class Matrix:
                         right = 0
 
                         while x + left - 1 >= 0:
-                            den = DENSITY[pmatrix[x + left - 1, y + 1, 0]]
+                            den = DENSITY[pmatrix[x + left - 1, y + 1]]
 
                             if den < pixdensity:
                                 left -= 1
@@ -462,7 +533,7 @@ class Matrix:
                                 break
 
                         while x + right + 1 < shape[0]:
-                            den = DENSITY[pmatrix[x + right + 1, y + 1, 0]]
+                            den = DENSITY[pmatrix[x + right + 1, y + 1]]
 
                             if den < pixdensity:
                                 right += 1
@@ -484,9 +555,7 @@ class Matrix:
                         else:
                             x_c = x + (right if abs(right) < abs(left) else left)
 
-                        temp = pmatrix[x_c, y].copy()
-                        pmatrix[x_c, y] = pmatrix[x, y]
-                        pmatrix[x, y] = temp
+                        pmatrix[x, y], pmatrix[x_c, y] = pmatrix[x_c, y], pmatrix[x, y]
                         pmatrix_bools[x, y] = True
                         pmatrix_bools[x_c, y] = True
 

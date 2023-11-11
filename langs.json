@@ -14,12 +14,14 @@
       "lava": "Лава"
     },
     "other": {
+      "reset_field": "Очистить поле",
+      "heat_coef": "Коэф. теплопередачи",
       "brshsz": "Размер кисти",
       "mode": "Режим",
       "brshmd": "Сменить режим кисти",
       "dspmd": "Сменить режим отображения",
       "pause": "Пауза",
-      "strt": "Продолжить",
+      "start": "Продолжить",
       "title": "Песочница"
     },
     "brush_modes": {
@@ -46,12 +48,14 @@
       "lava": "Lava"
     },
     "other": {
+      "reset_field": "Clear field",
+      "heat_coef": "Heat trans. coef",
       "brshsz": "Brush size",
       "mode": "Mode",
       "brshmd": "Change brush mode",
       "dspmd": "Change display mode",
       "pause": "Pause",
-      "strt": "Start",
+      "start": "Start",
       "title": "Sandbox"
     },
     "brush_modes": {
