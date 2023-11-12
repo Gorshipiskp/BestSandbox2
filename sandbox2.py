@@ -1,8 +1,6 @@
 import collections
 import time
 from json import load
-
-import numba
 import pygame
 import pygame_widgets
 from pygame_widgets.button import ButtonArray, Button
@@ -66,7 +64,7 @@ def main():
     widgets = {
         'brush_size_slider': {
             'type': "Slider", 'attrs': {'min': 1, 'max': 75, 'handleRadius': 11,
-                                        'handleColour': pygame.Color(110, 115, 120), 'initial': 3}
+                                        'handleColour': (110, 115, 120), 'initial': 3}
         },
         'brush_size_textbox': {
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
@@ -79,7 +77,7 @@ def main():
         },
         'heat_quan_slider': {
             'type': "Slider", 'attrs': {'min': 0, 'max': 200, 'handleRadius': 11,
-                                        'handleColour': pygame.Color(110, 115, 120), 'initial': 110}
+                                        'handleColour': (110, 115, 120), 'initial': 110}
         },
         'heat_quan_textbox': {
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
@@ -100,7 +98,7 @@ def main():
         },
         'heat_coef_slider': {
             'type': "Slider", 'attrs': {'min': 0, 'max': 1.5, 'handleRadius': 11, 'step': 0.01,
-                                        'handleColour': pygame.Color(110, 115, 120), 'initial': 0.4}
+                                        'handleColour': (110, 115, 120), 'initial': 0.4}
         },
         'heat_coef_textbox': {
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
@@ -141,12 +139,6 @@ def main():
 
     start_playing = time.time()
 
-    pixels = list(Utils.get_pixels_on_circle(1, x0, y0) for x0, y0 in
-                  Utils.get_line_points(1, 1, 2, 2))
-
-    if pixels:
-        Utils.place_pixels_many(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, mtrx.selected_pix,
-                                mtrx.brush_mode, 10, numba.typed.List(pixels))
     Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, 0, 0, 0, 0, 1, mtrx.selected_pix,
                    mtrx.brush_mode, 1, *mtrx.size)
 
@@ -158,8 +150,7 @@ def main():
 
         clock.tick(FPS)
         psx3d = pygame.surfarray.pixels3d(mtrx.surface)
-        psx3d, mtrx.colors_array_bool = mtrx.get_color_array(psx3d, mtrx.colors_array_bool, mtrx.pmatrix,
-                                                             mtrx.temp_pmatrix, mtrx.display_mode)
+        psx3d = mtrx.get_color_array(psx3d, mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.display_mode)
         del psx3d
 
         heat_quan = widgets['heat_quan_slider']['ref'].getValue() - 100
@@ -181,9 +172,8 @@ def main():
         widgets['heat_quan_textbox']['ref'].text = f"{'+' if heat_quan > 0 else ''}{heat_quan}°C"
 
         if not mtrx.pause:
+            mtrx.iter(mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix)
             mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, heat_coef)
-            # mtrx.temp_pmatrix = mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool)
-            mtrx.colors_array_bool = mtrx.iter(mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -200,7 +190,7 @@ def main():
                         x1, y1 = x0, y0
 
                     Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, x0, y0,
-                                   x1, y1, BRUSH_SIZE, mtrx.selected_pix, mtrx.brush_mode, heat_quan, *mtrx.size)
+                                   x1, y1, BRUSH_SIZE - 1, mtrx.selected_pix, mtrx.brush_mode, heat_quan, *mtrx.size)
                     last = (pos_x, pos_y)
             else:
                 last = None

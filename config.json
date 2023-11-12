@@ -1,6 +1,6 @@
 {
-  "MAX_FPS": 360,
-  "HEIGHT": 1000,
-  "WIDTH": 1690,
-  "SCALE": 1
+  "MAX_FPS": 960,
+  "HEIGHT": 75,
+  "WIDTH": 75,
+  "SCALE": 10
 }
