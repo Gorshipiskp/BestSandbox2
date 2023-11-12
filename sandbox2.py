@@ -1,6 +1,7 @@
 import collections
 import time
 from json import load
+
 import pygame
 import pygame_widgets
 from pygame_widgets.button import ButtonArray, Button
@@ -19,9 +20,9 @@ SCRNSIZE = (WID, HEI)
 SCRNSIZE_SCALED = (WID * SCALE, HEI * SCALE)
 
 widgetsClasses = {
-    'Slider': {'class': Slider, 'size': (MENU_WIDTH - 30, 25)},
-    'TextBox': {'class': TextBox, 'size': (MENU_WIDTH - 15, 25)},
-    'Button': {'class': Button, 'size': (MENU_WIDTH - 10, 20)}
+    'Slider': {'class': Slider, 'size': (MENU_WIDTH - 40, 25)},
+    'TextBox': {'class': TextBox, 'size': (MENU_WIDTH - 20, 25)},
+    'Button': {'class': Button, 'size': (MENU_WIDTH - 20, 20)}
 }
 
 mtrx = Matrix(SCRNSIZE)
@@ -50,7 +51,7 @@ def main():
 
     last = None
     pygame.init()
-    STFONT = pygame.font.SysFont("Bahnschrift", 17)
+    STFONT = pygame.font.SysFont("Bahnschrift", 16)
     STFONT_SMALL = pygame.font.SysFont("Bahnschrift", 14)
     STFONT_BOLD_SMALL = pygame.font.SysFont("Bahnschrift", 14)
     STFONT_BOLD_SMALL.set_bold(True)
@@ -62,46 +63,47 @@ def main():
     stopped = False
 
     widgets = {
+        'brush_size_textbox': {
+            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
+        },
         'brush_size_slider': {
             'type': "Slider", 'attrs': {'min': 1, 'max': 75, 'handleRadius': 11,
-                                        'handleColour': (110, 115, 120), 'initial': 3}
+                                        'handleColour': (110, 115, 120), 'initial': 3}, "ExtPadding": True,
         },
-        'brush_size_textbox': {
-            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
+        'brush_mode_textbox': {
+            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
         },
         'brush_mode_button': {
             'type': "Button", 'attrs': {'text': language['other']['dspmd'], 'onClick': mtrx.set_brush_mode},
+            "ExtPadding": True,
         },
-        'brush_mode_textbox': {
-            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
+        'heat_quan_textbox': {
+            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
         },
         'heat_quan_slider': {
             'type': "Slider", 'attrs': {'min': 0, 'max': 200, 'handleRadius': 11,
-                                        'handleColour': (110, 115, 120), 'initial': 110}
-        },
-        'heat_quan_textbox': {
-            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
+                                        'handleColour': (110, 115, 120), 'initial': 110}, "ExtPadding": True,
         },
         'cell_temp_textbox': {
+            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT},
+            "ExtPadding": True,
+        },
+        'display_mode_textbox': {
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
         },
         'display_button': {
             'type': "Button", 'attrs': {'text': language['other']['dspmd'], 'onClick': mtrx.set_display_mode},
             "ExtPadding": True,
         },
-        'display_mode_textbox': {
+        'heat_coef_textbox': {
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
-        },
-        'onpausebutton': {
-            'type': "Button", 'attrs': {'text': language['other']['pause'], 'onClick': toggle_pause},
-            "ExtPadding": True, "selfParam": True
         },
         'heat_coef_slider': {
             'type': "Slider", 'attrs': {'min': 0, 'max': 1.5, 'handleRadius': 11, 'step': 0.01,
-                                        'handleColour': (110, 115, 120), 'initial': 0.4}
+                                        'handleColour': (110, 115, 120), 'initial': 0.4}, "ExtPadding": True,
         },
-        'heat_coef_textbox': {
-            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}, "ExtPadding": True,
+        'onpausebutton': {
+            'type': "Button", 'attrs': {'text': language['other']['pause'], 'onClick': toggle_pause}, "selfParam": True
         },
         'reset_field_button': {
             'type': "Button", 'attrs': {'text': language['other']['reset_field'], 'onClick': mtrx.reset_field}
@@ -113,7 +115,13 @@ def main():
 
     for name_id, vals in widgets.items():
         size = widgetsClasses[vals['type']]['size']
-        vals['ref'] = widgetsClasses[vals['type']]['class'](screen, 10, yp, *size, **vals['attrs'])
+
+        if vals['type'] == "Slider":
+            w_p = 10
+        else:
+            w_p = 0
+
+        vals['ref'] = widgetsClasses[vals['type']]['class'](screen, 10 + w_p, yp, *size, **vals['attrs'])
 
         if vals.get("selfParam"):
             vals['ref'].onClickParams = (vals['ref'],)
@@ -168,12 +176,16 @@ def main():
         if 0 <= pos_x < mtrx.size[0] and 0 <= pos_y < mtrx.size[1]:
             # cell_temp_textbox.text = f"{mtrx.temp_pmatrix[pos_x, pos_y]:.2f}K"
             widgets['cell_temp_textbox']['ref'].text = f"{mtrx.temp_pmatrix[pos_x, pos_y] - 273.15:.2f}°C"
+        else:
+            widgets['cell_temp_textbox']['ref'].text = f"-"
 
-        widgets['heat_quan_textbox']['ref'].text = f"{'+' if heat_quan > 0 else ''}{heat_quan}°C"
+        widgets['heat_quan_textbox']['ref'].text = f"{language['other']['power']}: " \
+                                                   f"{'+' if heat_quan > 0 else ''}{heat_quan}°C"
 
         if not mtrx.pause:
-            mtrx.iter(mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix)
+            mtrx.chem_iter(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool)
             mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, heat_coef)
+            mtrx.iter(mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:

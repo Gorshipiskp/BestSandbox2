@@ -11,19 +11,15 @@
       "air": "Воздух",
       "ice": "Лёд",
       "lqntg": "Жидкий Азот",
-      "steam": "Пар",
       "lava": "Лава"
     },
     "other": {
-      "power": "Сила теплопушки",
-      "reset_field": "Очистить поле",
-      "heat_coef": "Коэф. теплопередачи",
       "brshsz": "Размер кисти",
       "mode": "Режим",
       "brshmd": "Сменить режим кисти",
       "dspmd": "Сменить режим отображения",
       "pause": "Пауза",
-      "start": "Продолжить",
+      "strt": "Продолжить",
       "title": "Песочница"
     },
     "brush_modes": {
@@ -47,19 +43,15 @@
       "air": "Air",
       "ice": "Ice",
       "lqntg": "Liquid Nitrogen",
-      "steam": "Steam",
       "lava": "Lava"
     },
     "other": {
-      "power": "Heat Gun power",
-      "reset_field": "Clear field",
-      "heat_coef": "Heat trans. coef",
       "brshsz": "Brush size",
       "mode": "Mode",
       "brshmd": "Change brush mode",
       "dspmd": "Change display mode",
       "pause": "Pause",
-      "start": "Start",
+      "strt": "Start",
       "title": "Sandbox"
     },
     "brush_modes": {
