@@ -147,10 +147,11 @@ def main():
 
     start_playing = time.time()
 
-    Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, 0, 0, 0, 0, 1, mtrx.selected_pix,
+    Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, 0, 0, 0, 0, 1, mtrx.selected_pix,
                    mtrx.brush_mode, 1, *mtrx.size)
 
-    while not stopped and time.time() - start_playing <= 300:
+    # while not stopped and time.time() - start_playing <= 300:
+    while not stopped:
         start = time.time()
 
         # print(numpy.sum(mtrx.temp_pmatrix[:, :]), numpy.max(mtrx.temp_pmatrix[:, :]),
@@ -158,7 +159,7 @@ def main():
 
         clock.tick(FPS)
         psx3d = pygame.surfarray.pixels3d(mtrx.surface)
-        psx3d = mtrx.get_color_array(psx3d, mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.display_mode)
+        psx3d = mtrx.get_color_array(psx3d, mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.display_mode)
         del psx3d
 
         heat_quan = widgets['heat_quan_slider']['ref'].getValue() - 100
@@ -183,9 +184,9 @@ def main():
                                                    f"{'+' if heat_quan > 0 else ''}{heat_quan}°C"
 
         if not mtrx.pause:
-            mtrx.chem_iter(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool)
-            mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, heat_coef)
-            mtrx.iter(mtrx.colors_array_bool, mtrx.pmatrix, mtrx.temp_pmatrix)
+            mtrx.chem_iter(mtrx.pmatrix, mtrx.temp_pmatrix)
+            mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, heat_coef)
+            mtrx.iter(mtrx.pmatrix, mtrx.temp_pmatrix)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -201,8 +202,8 @@ def main():
                     else:
                         x1, y1 = x0, y0
 
-                    Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.colors_array_bool, x0, y0,
-                                   x1, y1, BRUSH_SIZE - 1, mtrx.selected_pix, mtrx.brush_mode, heat_quan, *mtrx.size)
+                    Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, x0, y0, x1, y1, BRUSH_SIZE - 1, mtrx.selected_pix,
+                                   mtrx.brush_mode, heat_quan, *mtrx.size)
                     last = (pos_x, pos_y)
             else:
                 last = None
@@ -231,3 +232,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    time.sleep(5)

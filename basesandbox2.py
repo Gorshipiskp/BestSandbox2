@@ -1,6 +1,7 @@
 import json
 import time
 from random import random
+
 import numpy
 import pygame
 from numba import prange, njit
@@ -50,7 +51,7 @@ subs = {
         'static': True
     },
 }
-
+f
 pixs = (
     {  # 0
         # 'density': 0.0,  # kg/m3
@@ -58,7 +59,7 @@ pixs = (
         'color': BASE_COLOR,
         'name': 'air',
         "subs": 0,
-        "heat_capacity": 1.005,
+        "heat_capacity": 0.000000000001,
     },
     {  # 1
         'density': 1550.0,  # kg/m3
@@ -106,11 +107,13 @@ pixs = (
     },
     {  # 7
         'density': 808.0,  # kg/m3
-        'color': (210, 240, 250),
+        'color': (195, 225, 235),
         'name': 'lqntg',
         "subs": 2,
         "temperature": CtoK(-205),
-        "heat_capacity": 1.04,
+        "temp_transformations": (CtoK(-215), 14, CtoK(-200), 13, 7),
+        "heat_capacity": 10.04,
+        # todo: "heat_capacity": 1.04,
     },
     {  # 8
         'density': 1.695,  # kg/m3
@@ -136,13 +139,36 @@ pixs = (
         "temp_transformations": (CtoK(0), 10, CtoK(100), 11, 2)
     },
     {  # 11
-        'density': 880.0,  # kg/m3
+        'density': 1.2,  # kg/m3
         'color': (155, 165, 240),
         'name': 'steam',
         "temperature": CtoK(120),
         "subs": 0,
         "heat_capacity": 1.996,
         "temp_transformations": (CtoK(0), 10, CtoK(100), 11, 2)
+    },
+    {  # 12
+        'density': 1200000.0,  # kg/m3
+        'color': (165, 165, 165),
+        'name': 'brck_thermo',
+        "subs": 3,
+        "heat_capacity": 10000,
+    },
+    {  # 13
+        'density': 1.2506,  # kg/m3
+        'color': (105, 105, 105),
+        'name': 'nitrogen',
+        "subs": 0,
+        "heat_capacity": 1.042,
+        "temp_transformations": (CtoK(-215), 14, CtoK(-200), 13, 7),
+    },
+    {  # 14
+        'density': 1024,  # kg/m3
+        'color': (155, 155, 155),
+        'name': 'solid_nitrogen',
+        "subs": 1,
+        "heat_capacity": 1.042,
+        "temp_transformations": (CtoK(-215), 14, CtoK(-200), 13, 7),
     },
 )
 
@@ -183,12 +209,11 @@ def check_poss_movement(x0: int, y0: int, x1: int, y1: int, shape_x: int, shape_
 
 @njit(fastmath=True)
 def move_cond(x0: int, y0: int, x1: int, y1: int, shape_x: int, shape_y: int, pixdensity: float, pmatrix: numpy.ndarray,
-              pmatrix_bools: numpy.ndarray, temp_pmatrix: numpy.ndarray, possibility: float = 1.0):
-    if check_borders(x1, y1, shape_x, shape_y) and (DENSITY[pmatrix[x1, y1]] < pixdensity or pmatrix[x1, y1] == 0):
+              temp_pmatrix: numpy.ndarray, possibility: float = 1.0):
+    if check_borders(x1, y1, shape_x, shape_y) and DENSITY[pmatrix[x1, y1]] < pixdensity:
         if random() <= possibility:
             pmatrix[x0, y0], pmatrix[x1, y1] = pmatrix[x1, y1], pmatrix[x0, y0]
             temp_pmatrix[x1, y1], temp_pmatrix[x0, y0] = temp_pmatrix[x0, y0], temp_pmatrix[x1, y1]
-            pmatrix_bools[x0, y0], pmatrix_bools[x1, y1] = True, True
 
 
 @njit(fastmath=True, cache=True)
@@ -221,7 +246,7 @@ class Utils:
 
     @staticmethod
     @njit(parallel=True, fastmath=True, nogil=True)
-    def drawline(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, bool_array: numpy.ndarray, x0: int, y0: int,
+    def drawline(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, x0: int, y0: int,
                  x1: int, y1: int, brushsize: int, selected_pix: int,
                  brush_mode: int, heat_quan: int, mtrx_w: int, mtrx_h: int):
         dx: int = numpy.abs(x1 - x0)
@@ -239,7 +264,6 @@ class Utils:
                     if 0 <= x < mtrx_w and 0 <= y < mtrx_h:
                         if brush_mode == 0:
                             pmatrix[x, y] = selected_pix
-                            bool_array[x, y] = True
                             temp_pmatrix[x, y] = PIXS_TEMPERATURES[selected_pix]
                         elif brush_mode == 1:
                             temp_pmatrix[x, y] = max(temp_pmatrix[x, y] + heat_quan, 0)
@@ -261,7 +285,6 @@ class Utils:
                         if 0 <= x < mtrx_w and 0 <= y < mtrx_h:
                             if brush_mode == 0:
                                 pmatrix[x, y] = selected_pix
-                                bool_array[x, y] = True
                                 temp_pmatrix[x, y] = PIXS_TEMPERATURES[selected_pix]
                             elif brush_mode == 1:
                                 temp_pmatrix[x, y] = max(temp_pmatrix[x, y] + heat_quan, 0)
@@ -325,9 +348,7 @@ class Matrix:
         self.pmatrix = numpy.array(numpy.full(size, 0, dtype=int))
         self.temp_pmatrix = numpy.array(numpy.full(self.size, DEFAULT_TEMPERATURE, dtype=float))
 
-        self.colors_array_bool = numpy.array(numpy.full(size, True))
-        self.colors_array = self.get_color_array(numpy.array([[(0, 0, 0)] * size[1]] * size[0]),
-                                                 self.colors_array_bool, self.pmatrix,
+        self.colors_array = self.get_color_array(numpy.array([[(0, 0, 0)] * size[1]] * size[0]), self.pmatrix,
                                                  self.temp_pmatrix, self.display_mode)
 
         self.surface = pygame.Surface(size)
@@ -339,10 +360,9 @@ class Matrix:
     def reset_field(self):
         self.pmatrix = numpy.array(numpy.full(self.size, 0, dtype=int))
         self.temp_pmatrix.fill(DEFAULT_TEMPERATURE)
-        self.colors_array_bool.fill(True)
 
         self.colors_array = self.get_color_array(
-            numpy.array([[(0, 0, 0)] * self.size[1]] * self.size[0]), self.colors_array_bool, self.pmatrix,
+            numpy.array([[(0, 0, 0)] * self.size[1]] * self.size[0]), self.pmatrix,
             self.temp_pmatrix, self.display_mode)
 
         self.surface = pygame.Surface(self.size)
@@ -353,7 +373,6 @@ class Matrix:
 
     def set_display_mode(self) -> None:
         self.display_mode = 1 if self.display_mode == 0 else 0
-        self.colors_array_bool = numpy.full(self.colors_array_bool.shape, True)
 
     def set_pause(self) -> None:
         self.pause = not self.pause
@@ -366,18 +385,16 @@ class Matrix:
 
     @staticmethod
     @njit(parallel=True, nogil=True, fastmath=True)
-    def get_color_array(colors_array: numpy.ndarray, colors_array_bools: numpy.ndarray, pmatrix: numpy.ndarray,
+    def get_color_array(colors_array: numpy.ndarray, pmatrix: numpy.ndarray,
                         temp_pmatrix: numpy.ndarray, mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
         shape = pmatrix.shape
 
         for xind in prange(shape[0]):
             for yind in prange(shape[1]):
-                if colors_array_bools[xind, yind]:
-                    if mode == 0:
-                        colors_array[xind, yind] = COLORS[pmatrix[xind, yind]]
-                    elif mode == 1:
-                        colors_array[xind, yind] = temperature_to_color(temp_pmatrix[xind, yind])
-                    colors_array_bools[xind, yind] = True
+                if mode == 0:
+                    colors_array[xind, yind] = COLORS[pmatrix[xind, yind]]
+                elif mode == 1:
+                    colors_array[xind, yind] = temperature_to_color(temp_pmatrix[xind, yind])
         return colors_array
 
     def __getitem__(self, key):
@@ -388,8 +405,8 @@ class Matrix:
 
     @staticmethod
     @njit(nogil=True, fastmath=True)
-    def changing_temp(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray,
-                      pmatrix_bools: numpy.ndarray, x0: int, y0: int, x1: int, y1: int, heat_coef: float) -> None:
+    def changing_temp(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray, x0: int, y0: int,
+                      x1: int, y1: int, heat_coef: float) -> None:
         if not (0 <= x0 + x1 < temp_pmatrix.shape[0] and 0 <= y0 + y1 < temp_pmatrix.shape[1]):
             return
 
@@ -418,13 +435,10 @@ class Matrix:
         temp_pmatrix[x0, y0] += diff * (n0 < n1)
         temp_pmatrix[x0 + x1, y0 + y1] -= diff * (n0 < n1)
 
-        pmatrix_bools[x0, y0] = True
-        pmatrix_bools[x0 + x1, y0 + y1] = True
-
     @staticmethod
-    @Utils.speedtest
+    # @Utils.speedtest
     @njit(parallel=True, fastmath=True, nogil=True)
-    def chem_iter(pmatrix, temp_pmatrix, pmatrix_bools):
+    def chem_iter(pmatrix, temp_pmatrix):
         shape_x, shape_y = temp_pmatrix.shape
 
         for x in prange(shape_x):
@@ -446,7 +460,7 @@ class Matrix:
     @staticmethod
     # @Utils.speedtest
     @njit(parallel=True, fastmath=True, nogil=True)
-    def temp_iter(pmatrix, temp_pmatrix, pmatrix_bools, heat_coef):
+    def temp_iter(pmatrix, temp_pmatrix, heat_coef):
         points = numpy.array([(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (-1, 1), (1, 1)])
         ln = len(points)
         changing_temp = global_changing_temp
@@ -456,12 +470,11 @@ class Matrix:
             for y in prange(shape_h):
                 if SUBS_CHARS_PIXS[pmatrix[x, y], 3]:
                     for pind in prange(ln):
-                        changing_temp(pmatrix, temp_pmatrix, pmatrix_bools, x, y,
-                                      points[pind][0], points[pind][1], heat_coef)
+                        changing_temp(pmatrix, temp_pmatrix, x, y, points[pind][0], points[pind][1], heat_coef)
 
     @staticmethod
     @njit(parallel=True, fastmath=True, nogil=True)
-    def iter(pmatrix_bools: numpy.ndarray, pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray) -> numpy.ndarray:
+    def iter(pmatrix: numpy.ndarray, temp_pmatrix: numpy.ndarray) -> numpy.ndarray:
         shape_x, shape_y = pmatrix.shape
 
         one_third = 1 / 3
@@ -479,15 +492,15 @@ class Matrix:
                 pixdensity = DENSITY[pmatrix[x, y]]
 
                 if pixtypes[0]:
-                    move_cond(x, y, x, y + 1, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x, y + 1, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_third)
-                    move_cond(x, y, x - 1, y, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x - 1, y, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_fifth)
-                    move_cond(x, y, x + 1, y, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x + 1, y, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_third)
-                    move_cond(x, y, x + 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x + 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_third)
-                    move_cond(x, y, x - 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x - 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_twenty_fifth)
                 elif pixtypes[1]:
                     down_cond = 0
@@ -495,21 +508,20 @@ class Matrix:
                     if check_borders(x, y + 1, shape_x, shape_y) and DENSITY[pmatrix[x, y + 1]] < pixdensity:
                         down_cond += 1
 
-                    move_cond(x, y, x - 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x - 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_thirty_eighth_eight / (down_cond + 1))
-                    move_cond(x, y, x + 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x + 1, y + 1, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_thirty_eighth / (down_cond + 1))
 
                     if down_cond:
                         temp_pmatrix[x, y], temp_pmatrix[x, y + 1] = temp_pmatrix[x, y + 1], temp_pmatrix[x, y]
                         pmatrix[x, y], pmatrix[x, y + 1] = pmatrix[x, y + 1], pmatrix[x, y]
-                        pmatrix_bools[x, y], pmatrix_bools[x, y + 1] = True, True
                 elif pixtypes[2]:
-                    move_cond(x, y, x, y + 1, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x, y + 1, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               nine_tenths)
-                    move_cond(x, y, x + 1, y, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x + 1, y, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_twenty_fifth)
-                    move_cond(x, y, x - 1, y, shape_x, shape_y, pixdensity, pmatrix, pmatrix_bools, temp_pmatrix,
+                    move_cond(x, y, x - 1, y, shape_x, shape_y, pixdensity, pmatrix, temp_pmatrix,
                               one_twenty_fifth)
 
                     if y + 1 >= shape_y:
@@ -560,12 +572,10 @@ class Matrix:
                                 x, y]
                             temp_pmatrix[x, y], temp_pmatrix[x + selected_dir, y + 1] = temp_pmatrix[
                                 x + selected_dir, y + 1], temp_pmatrix[x, y]
-                            pmatrix_bools[x, y], pmatrix_bools[x + selected_dir, y + 1] = True, True
                         else:
                             pmatrix[x, y], pmatrix[x + selected_dir, y] = pmatrix[x + selected_dir, y], pmatrix[x, y]
                             temp_pmatrix[x, y], temp_pmatrix[x + selected_dir, y] = temp_pmatrix[x + selected_dir, y], \
                                 temp_pmatrix[x, y]
-                            pmatrix_bools[x, y], pmatrix_bools[x + selected_dir, y] = True, True
 
 
 temperature_to_color = Utils.temperature_to_color
