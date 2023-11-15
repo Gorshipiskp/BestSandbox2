@@ -1,20 +1,19 @@
 import collections
 import time
 from json import load
-
 import pygame
 import pygame_widgets
 from pygame_widgets.button import ButtonArray, Button
 from pygame_widgets.slider import Slider
 from pygame_widgets.textbox import TextBox
-
 from basesandbox2 import Matrix, pixs, Utils, NAMES, language
+
 
 cfg = load(open('config.json', 'r', encoding="UTF-8"))
 
 FPS = cfg["MAX_FPS"]
-MENU_WIDTH = 230
-WID, HEI = cfg["WIDTH"], cfg["HEIGHT"]
+MENU_WIDTH = 260
+WID, HEI = cfg["WIDTH"] + 1, cfg["HEIGHT"] + 1
 SCALE = cfg["SCALE"]
 SCRNSIZE = (WID, HEI)
 SCRNSIZE_SCALED = (WID * SCALE, HEI * SCALE)
@@ -47,7 +46,8 @@ def main():
     params = collections.deque()
 
     for pix_id, _ in enumerate(pixs):
-        params.append((pix_id,))
+        if pix_id != 16:
+            params.append((pix_id,))
 
     last = None
     pygame.init()
@@ -74,7 +74,7 @@ def main():
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
         },
         'brush_mode_button': {
-            'type': "Button", 'attrs': {'text': language['other']['dspmd'], 'onClick': mtrx.set_brush_mode},
+            'type': "Button", 'attrs': {'text': language['other']['brshmd'], 'onClick': mtrx.set_brush_mode},
             "ExtPadding": True,
         },
         'heat_quan_textbox': {
@@ -99,8 +99,22 @@ def main():
             'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
         },
         'heat_coef_slider': {
-            'type': "Slider", 'attrs': {'min': 0, 'max': 1.5, 'handleRadius': 11, 'step': 0.01,
+            'type': "Slider", 'attrs': {'min': 0, 'max': 1.35, 'handleRadius': 11, 'step': 0.01,
                                         'handleColour': (110, 115, 120), 'initial': 0.4}, "ExtPadding": True,
+        },
+        'heater_temp_textbox': {
+            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
+        },
+        'heater_temp_slider': {
+            'type': "Slider", 'attrs': {'min': 273.15, 'max': 2773.15, 'handleRadius': 11, 'step': 1,
+                                        'handleColour': (110, 115, 120), 'initial': 773.15}, "ExtPadding": True,
+        },
+        'cooler_temp_textbox': {
+            'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
+        },
+        'cooler_temp_slider': {
+            'type': "Slider", 'attrs': {'min': 0, 'max': 273.15, 'handleRadius': 11, 'step': 1,
+                                        'handleColour': (110, 115, 120), 'initial': 173}, "ExtPadding": True,
         },
         'onpausebutton': {
             'type': "Button", 'attrs': {'text': language['other']['pause'], 'onClick': toggle_pause}, "selfParam": True
@@ -131,21 +145,21 @@ def main():
             yp += extPad
 
     ButtonArray(
-        screen, 5, yp + padding, MENU_WIDTH - 10, 20 * len(pixs) - 10,
+        screen, 5, yp + padding, MENU_WIDTH - 10, 20 * (len(pixs) - 1) - 10,
         texts=NAMES,
         fonts=[STFONT_BOLD_SMALL] * len(pixs),
         inactiveColour=(255, 0, 0),
         pressedColour=(0, 255, 0), radius=15,
         border=2,
-        onClicks=[mtrx.select_pixel] * len(pixs),
+        onClicks=[mtrx.select_pixel] * (len(pixs) - 1),
         onClickParams=tuple(params),
-        shape=(1, len(pixs))
+        shape=(1, (len(pixs) - 1))
     )
 
     FPS_C_S = 0
     FPS_C_N = 0
 
-    start_playing = time.time()
+    # start_playing = time.time()
 
     Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, 0, 0, 0, 0, 1, mtrx.selected_pix,
                    mtrx.brush_mode, 1, *mtrx.size)
@@ -164,12 +178,16 @@ def main():
 
         heat_quan = widgets['heat_quan_slider']['ref'].getValue() - 100
         heat_coef = widgets['heat_coef_slider']['ref'].getValue()
+        heater_temp = widgets['heater_temp_slider']['ref'].getValue()
+        cooler_temp = widgets['cooler_temp_slider']['ref'].getValue()
 
         BRUSH_SIZE = widgets['brush_size_slider']['ref'].getValue()
         widgets['brush_size_textbox']['ref'].text = f"{language['other']['brshsz']}: {BRUSH_SIZE}"
         widgets['display_mode_textbox']['ref'].text = f"{language['other']['mode']}: {display_modes[mtrx.display_mode]}"
         widgets['brush_mode_textbox']['ref'].text = f"{language['other']['mode']}: {brush_modes[mtrx.brush_mode]}"
         widgets['heat_coef_textbox']['ref'].text = f"{language['other']['heat_coef']}: {heat_coef}"
+        widgets['heater_temp_textbox']['ref'].text = f"{language['other']['heater_temp']}: {heater_temp - 273.15:.2f}°C"
+        widgets['cooler_temp_textbox']['ref'].text = f"{language['other']['cooler_temp']}: {cooler_temp - 273.15:.2f}°C"
 
         pos = pygame.mouse.get_pos()
         pos_x, pos_y = (pos[0] - MENU_WIDTH) // SCALE, pos[1] // SCALE
@@ -184,9 +202,9 @@ def main():
                                                    f"{'+' if heat_quan > 0 else ''}{heat_quan}°C"
 
         if not mtrx.pause:
-            mtrx.chem_iter(mtrx.pmatrix, mtrx.temp_pmatrix)
-            mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, heat_coef)
             mtrx.iter(mtrx.pmatrix, mtrx.temp_pmatrix)
+            mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, heat_coef, heater_temp, cooler_temp)
+            mtrx.chem_iter(mtrx.pmatrix, mtrx.temp_pmatrix)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -213,7 +231,7 @@ def main():
         if SCALE != 1:
             screen.blit(pygame.transform.scale(mtrx.surface, SCRNSIZE_SCALED), (MENU_WIDTH, 0))
         else:
-            screen.blit(mtrx.surface, (MENU_WIDTH, 0))
+            screen.blit(mtrx.surface, (MENU_WIDTH, 0), area=mtrx.surface.get_rect())
         pygame.display.update()
 
         eps_time = time.time() - start
@@ -232,4 +250,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    time.sleep(5)
+    # time.sleep(5)
