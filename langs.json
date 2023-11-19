@@ -17,7 +17,6 @@
       "solid_nitrogen": "Твёрдый Азот",
       "nitrogen": "Азот",
       "steam": "Пар",
-      "filler": "Заполнитель",
       "lava": "Лава"
     },
     "other": {
@@ -61,7 +60,6 @@
       "solid_nitrogen": "Solid Nitrogen",
       "nitrogen": "Nitrogen",
       "steam": "Steam",
-      "filler": "Filler",
       "lava": "Lava"
     },
     "other": {
