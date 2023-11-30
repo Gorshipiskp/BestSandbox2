@@ -1,3 +1,5 @@
+import numpy
+
 if __name__ == "__main__":
     import collections
     import time
@@ -7,7 +9,7 @@ if __name__ == "__main__":
     from pygame_widgets.button import ButtonArray, Button
     from pygame_widgets.slider import Slider
     from pygame_widgets.textbox import TextBox
-    from basesandbox2 import Matrix, pixs, Utils, NAMES, language, cfg
+    from basesandbox2 import Matrix, pixs, Utils, NAMES, language, cfg, COLORS
 
     FPS = cfg["MAX_FPS"]
     MENU_WIDTH = 260
@@ -39,11 +41,6 @@ if __name__ == "__main__":
     }
 
     def main():
-        def toggle_pause(btn):
-            mtrx.set_pause()
-            btn.text = STFONT_SMALL.render(language['other']['start'] if mtrx.pause else
-                                           language['other']['pause'], True, (5, 5, 5))
-
         params = collections.deque()
 
         for pix_id, _ in enumerate(pixs):
@@ -61,6 +58,17 @@ if __name__ == "__main__":
 
         clock = pygame.time.Clock()
         stopped = False
+        last_speed = [1]
+        game_speed = [1]
+
+        def toggle_pause():
+            if game_speed[0] != 0:
+                last_speed[0] = game_speed[0]
+                game_speed[0] = 0
+                widgets['speed_slider']['ref'].setValue(0)
+            else:
+                game_speed[0] = last_speed[0]
+                widgets['speed_slider']['ref'].setValue(last_speed[0])
 
         widgets = {
             'brush_size_textbox': {
@@ -99,7 +107,7 @@ if __name__ == "__main__":
                 'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
             },
             'heat_coef_slider': {
-                'type': "Slider", 'attrs': {'min': 0, 'max': 1, 'handleRadius': 11, 'step': 0.01,
+                'type': "Slider", 'attrs': {'min': 0, 'max': 1.5, 'handleRadius': 11, 'step': 0.01,
                                             'handleColour': (110, 115, 120), 'initial': 0.7}, "ExtPadding": True,
             },
             'heater_temp_textbox': {
@@ -116,9 +124,15 @@ if __name__ == "__main__":
                 'type': "Slider", 'attrs': {'min': 0, 'max': 273.15, 'handleRadius': 11, 'step': 0.1,
                                             'handleColour': (110, 115, 120), 'initial': 173}, "ExtPadding": True,
             },
+            'speed_textbox': {
+                'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
+            },
+            'speed_slider': {
+                'type': "Slider", 'attrs': {'min': 0, 'max': 1, 'handleRadius': 11, 'step': 0.01,
+                                            'handleColour': (110, 115, 120), 'initial': 1}, "ExtPadding": True,
+            },
             'onpausebutton': {
-                'type': "Button", 'attrs': {'text': language['other']['pause'], 'onClick': toggle_pause},
-                "selfParam": True
+                'type': "Button", 'attrs': {'text': language['other']['pause'], 'onClick': toggle_pause}
             },
             'reset_field_button': {
                 'type': "Button", 'attrs': {'text': language['other']['reset_field'], 'onClick': mtrx.reset_field}
@@ -156,6 +170,9 @@ if __name__ == "__main__":
 
         FPS_C_S = 0
         FPS_C_N = 0
+        speed_count = 0
+        ctrl_pressed = False
+        line_move = False
 
         # start_playing = time.time()
 
@@ -170,26 +187,26 @@ if __name__ == "__main__":
             #       numpy.min(mtrx.temp_pmatrix[:, :]))
 
             clock.tick(FPS)
-            psx3d = pygame.surfarray.pixels3d(mtrx.surface)
-            psx3d = mtrx.get_color_array(psx3d, mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.display_mode)
-            del psx3d
 
+            BRUSH_SIZE = widgets['brush_size_slider']['ref'].getValue()
             heat_quan = widgets['heat_quan_slider']['ref'].getValue() - 100
             heat_coef = float(widgets['heat_coef_slider']['ref'].getValue())
             heater_temp = widgets['heater_temp_slider']['ref'].getValue()
             cooler_temp = widgets['cooler_temp_slider']['ref'].getValue()
+            game_speed[0] = widgets['speed_slider']['ref'].getValue()
 
-            BRUSH_SIZE = widgets['brush_size_slider']['ref'].getValue()
             widgets['brush_size_textbox']['ref'].text = f"{language['other']['brshsz']}: {BRUSH_SIZE}"
-            widgets['display_mode_textbox'][
-                'ref'].text = f"{language['other']['mode']}: {display_modes[mtrx.display_mode]}"
+            widgets['display_mode_textbox']['ref'].text = \
+                f"{language['other']['mode']}: {display_modes[mtrx.display_mode]}"
             widgets['brush_mode_textbox']['ref'].text = f"{language['other']['mode']}: {brush_modes[mtrx.brush_mode]}"
             widgets['heat_coef_textbox']['ref'].text = f"{language['other']['heat_coef']}: {heat_coef:.2f}"
-            widgets['heater_temp_textbox'][
-                'ref'].text = f"{language['other']['heater_temp']}: {heater_temp - 273.15:.2f}°C"
-            widgets['cooler_temp_textbox'][
-                'ref'].text = f"{language['other']['cooler_temp']}: {cooler_temp - 273.15:.2f}°C"
-
+            widgets['heater_temp_textbox']['ref'].text = \
+                f"{language['other']['heater_temp']}: {heater_temp - 273.15:.2f}°C"
+            widgets['cooler_temp_textbox']['ref'].text = \
+                f"{language['other']['cooler_temp']}: {cooler_temp - 273.15:.2f}°C"
+            widgets['speed_textbox']['ref'].text = f"{language['other']['speed']}: {game_speed[0]:.2f}"
+            widgets['onpausebutton']['ref'].text = STFONT_SMALL.render(
+                language['other']['start'] if game_speed[0] == 0 else language['other']['pause'], True, (5, 5, 5))
             pos = pygame.mouse.get_pos()
             pos_x, pos_y = (pos[0] - MENU_WIDTH) // SCALE, pos[1] // SCALE
 
@@ -197,36 +214,60 @@ if __name__ == "__main__":
                 # cell_temp_textbox.text = f"{mtrx.temp_pmatrix[pos_x, pos_y]:.2f}K"
                 widgets['cell_temp_textbox']['ref'].text = f"{mtrx.temp_pmatrix[pos_x, pos_y] - 273.15:.2f}°C"
             else:
-                widgets['cell_temp_textbox']['ref'].text = f"-"
+                widgets['cell_temp_textbox']['ref'].text = "-"
 
             widgets['heat_quan_textbox']['ref'].text = f"{language['other']['power']}: " \
                                                        f"{'+' if heat_quan > 0 else ''}{heat_quan}°C"
 
-            if not mtrx.pause:
+            speed_count += 1
+            if game_speed[0] != 0 and speed_count % int(1 / game_speed[0]) == 0:
+
                 mtrx.iter(mtrx.pmatrix, mtrx.temp_pmatrix)
                 if heat_coef > 0:
                     mtrx.temp_iter(mtrx.pmatrix, mtrx.temp_pmatrix, heat_coef, heater_temp, cooler_temp)
                     mtrx.borders_cool(mtrx.pmatrix, mtrx.temp_pmatrix, heat_coef)
                 mtrx.chem_iter(mtrx.pmatrix, mtrx.temp_pmatrix)
 
+            if ctrl_pressed and line_move:
+                mtrx_layer = numpy.full_like(mtrx.pmatrix, 0)
+                Utils.drawline_layer(mtrx_layer, *line_move, pos_x, pos_y, BRUSH_SIZE - 1, mtrx.selected_pix)
+            else:
+                mtrx_layer = numpy.full_like(mtrx.pmatrix, 0)
+
+            psx3d = pygame.surfarray.pixels3d(mtrx.surface)
+            psx3d = mtrx.get_color_array(psx3d, mtrx.pmatrix, mtrx.temp_pmatrix, mtrx.display_mode, mtrx_layer)
+            del psx3d
+
+            if not (pygame.key.get_pressed()[pygame.K_LCTRL] and pygame.mouse.get_pressed()[0]) and ctrl_pressed:
+                if line_move:
+                    Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, *line_move, pos_x, pos_y, BRUSH_SIZE - 1,
+                                   mtrx.selected_pix, mtrx.brush_mode, heat_quan, *mtrx.size)
+                    line_move = False
+                    ctrl_pressed = pygame.key.get_pressed()[pygame.K_LCTRL]
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     stopped = True
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                    toggle_pause(widgets['onpausebutton']['ref'])
-                elif pygame.mouse.get_pressed()[0]:
+                if event.type == pygame.KEYDOWN:
+                    if pygame.key.get_pressed()[pygame.K_SPACE]:
+                        toggle_pause()
+                    ctrl_pressed = pygame.key.get_pressed()[pygame.K_LCTRL]
+                if pygame.mouse.get_pressed()[0]:
                     if pos_x >= 0 and pos_y >= 0:
                         x0, y0 = pos_x, pos_y
 
-                        if last:
-                            x1, y1 = last
+                        if ctrl_pressed:
+                            if not line_move:
+                                line_move = (x0, y0)
                         else:
-                            x1, y1 = x0, y0
+                            if last:
+                                x1, y1 = last
+                            else:
+                                x1, y1 = x0, y0
 
-                        Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, x0, y0, x1, y1, BRUSH_SIZE - 1,
-                                       mtrx.selected_pix,
-                                       mtrx.brush_mode, heat_quan, *mtrx.size)
-                        last = (pos_x, pos_y)
+                            Utils.drawline(mtrx.pmatrix, mtrx.temp_pmatrix, x0, y0, x1, y1, BRUSH_SIZE - 1,
+                                           mtrx.selected_pix, mtrx.brush_mode, heat_quan, *mtrx.size)
+                            last = (pos_x, pos_y)
                 else:
                     last = None
 
@@ -245,7 +286,7 @@ if __name__ == "__main__":
             # else:
             #     print(f"{eps_time:.8f} – {1 / eps_time}q/s")
 
-            if eps_time != 0 and not mtrx.pause:
+            if eps_time != 0 and game_speed != 0:
                 FPS_C_S += 1 / eps_time
                 FPS_C_N += 1
 
@@ -254,4 +295,4 @@ if __name__ == "__main__":
 
     if __name__ == "__main__":
         main()
-        time.sleep(3)
+        time.sleep(2)

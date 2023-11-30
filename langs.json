@@ -30,6 +30,7 @@
       "pause": "Пауза",
       "heater_temp": "Темп. нагревателя",
       "cooler_temp": "Темп. охладителя",
+      "speed": "Скорость игры",
       "start": "Продолжить",
       "title": "Песочница"
     },
@@ -73,6 +74,7 @@
       "pause": "Pause",
       "heater_temp": "Heater temperature",
       "cooler_temp": "Cooler temperature",
+      "speed": "Game speed",
       "start": "Start",
       "title": "Sandbox"
     },

@@ -1,8 +1,8 @@
 {
-  "MAX_FPS": 120,
-  "HEIGHT": 55,
-  "WIDTH": 80,
-  "SCALE": 17,
+  "MAX_FPS": 300,
+  "HEIGHT": 250,
+  "WIDTH": 300,
+  "SCALE": 4,
   "BOOSTED": true,
-  "LANG": "ru"
+  "LANG": "en"
 }
