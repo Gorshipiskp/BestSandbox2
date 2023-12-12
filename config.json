@@ -1,8 +1,8 @@
 {
   "MAX_FPS": 300,
-  "HEIGHT": 250,
-  "WIDTH": 300,
-  "SCALE": 4,
+  "HEIGHT": 1000,
+  "WIDTH": 1400,
+  "SCALE": 1,
   "BOOSTED": true,
-  "LANG": "en"
+  "LANG": "ru"
 }

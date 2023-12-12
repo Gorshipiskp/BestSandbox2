@@ -12,7 +12,7 @@ if __name__ == "__main__":
     from basesandbox2 import Matrix, pixs, Utils, NAMES, language, cfg, COLORS
 
     FPS = cfg["MAX_FPS"]
-    MENU_WIDTH = 260
+    MENU_WIDTH = 270
     WID, HEI = cfg["WIDTH"] + 1, cfg["HEIGHT"] + 1
     SCALE = cfg["SCALE"]
     BOOSTED = cfg['BOOSTED']
@@ -107,7 +107,7 @@ if __name__ == "__main__":
                 'type': "TextBox", 'attrs': {'borderThickness': 0, 'font': STFONT}
             },
             'heat_coef_slider': {
-                'type': "Slider", 'attrs': {'min': 0, 'max': 1.5, 'handleRadius': 11, 'step': 0.01,
+                'type': "Slider", 'attrs': {'min': 0, 'max': 1, 'handleRadius': 11, 'step': 0.01,
                                             'handleColour': (110, 115, 120), 'initial': 0.7}, "ExtPadding": True,
             },
             'heater_temp_textbox': {

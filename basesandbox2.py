@@ -1,13 +1,12 @@
 import json
 import time
 from json import load
-from random import random
+from random import random, randint
 import numpy
 import pygame
 from numba import prange, njit
 
 cfg = load(open('config.json', 'r', encoding="UTF-8"))
-
 lang = cfg['LANG']
 language = json.load(open("langs.json", 'r', encoding="UTF-8"))[lang]
 
@@ -499,16 +498,6 @@ class Matrix:
 
         return colors_array
 
-    @staticmethod
-    @njit(parallel=True, nogil=True, fastmath=True)
-    def get_layer_mask(mask, color):
-        mtrx_x, mtrx_y = mask.shape
-
-        for x in prange(1, mtrx_x - 1):
-            for y in prange(1, mtrx_y - 1):
-                colors_array[x, y] = [*color, 0]
-        return colors_array
-
     def __getitem__(self, key):
         return self.pmatrix[*key]
 
@@ -563,11 +552,10 @@ class Matrix:
                     pmatrix[x, y] = transformations[4]
 
     @staticmethod
-    # @Utils.speedtest
     @njit(parallel=True, fastmath=True, nogil=True)
     def temp_iter(pmatrix, temp_pmatrix, heat_coef, heater_temp: int, cooler_temp: int):
-        points = numpy.array([(0, 1), (1, 0), (0, -1), (-1, 0), (-1, 0), (0, -1), (1, 0), (0, 1)])
-        # points = numpy.array([(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, -1), (-1, 1), (1, 1)])
+        # points = numpy.array([(0, 1), (1, 0), (0, -1), (-1, 0), (-1, 0), (0, -1), (1, 0), (0, 1)])
+        points = numpy.array([(0, 1), (1, 0), (0, -1), (-1, 0)])
         ln = len(points)
         changing_temp = global_changing_temp
         shape_w, shape_h = temp_pmatrix.shape
